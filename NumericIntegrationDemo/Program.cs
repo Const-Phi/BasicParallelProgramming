@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using NumericIntegrationDemo.Extensions;
 
 namespace NumericIntegrationDemo
 {
@@ -24,6 +25,14 @@ namespace NumericIntegrationDemo
 
         public static void Main()
         {
+            
+            var person = new Person();
+
+            var houseNameForPerson = person.Maybe(x => x.Address)
+                .Maybe(x => x.House)
+                .Maybe(x => x.HouseName);
+            
+            
             /*
             const int poolSize = 100;
             
