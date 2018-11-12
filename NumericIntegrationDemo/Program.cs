@@ -1,105 +1,100 @@
 ﻿using System;
-using System.Threading;
 using System.Threading.Tasks;
-using NumericIntegrationDemo.Extensions;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using static System.Console;
 
 namespace NumericIntegrationDemo
 {
     internal class Program
     {
-        private static double result = 0;
-
-        private static volatile object locker = new object();
-
-        private static void lambda(object parameter)
+        public class TaskChain
         {
-            Console.WriteLine($"{parameter:D3}: out of critical section (before)");
-            lock (locker)
+            private readonly List<Task> tasks = new List<Task>();
+
+            
+            public TaskChain(params Action[] actions)
             {
-                Console.WriteLine($"{parameter}: in critical section");
-                result += (int) parameter;
+                if (actions is null)
+                    throw new ArgumentNullException(nameof(actions));
+
+                if (actions.Length < 1)
+                    return;
+                
+                var actionQueue = new Queue<Action>(actions);   
+                tasks.Add(new Task(actionQueue.Dequeue()));
+                while (actionQueue.Count > 0)
+                {
+                    tasks.Add(tasks.Last().ContinueWith(t => actionQueue.Dequeue()));
+                }           
             }
 
-            Console.WriteLine($"{parameter:D3}: out of critical section (after)");
+            public void Start() => tasks[0].Start();
+
+            public void Wait() => tasks.Last().Wait();
         }
 
         public static void Main()
         {
-            
-            var person = new Person();
+            // ParalleDemo();
 
-            var houseNameForPerson = person.Maybe(x => x.Address)
-                .Maybe(x => x.House)
-                .Maybe(x => x.HouseName);
-            
-            
-            /*
-            const int poolSize = 100;
-            
-            // Создание пула потоков
-            var threadPool = new Thread[poolSize];
-            for (var i = 0; i < poolSize; ++i)
-                threadPool[i] = new Thread(lambda);
-            
-            Console.WriteLine("До...");
-            
-            // Запуск потоков из пула
-            for (var i = 0; i < poolSize; ++i)
-                threadPool[i].Start(i);
+            // TaskChainDemo();
 
-            // Ожидание завершения всех потоков из пула
-            for (var i = 0; i < poolSize; ++i)
-                threadPool[i].Join();
+            const int size = 5;
+            var tasks = new Task[size];
             
-            Console.WriteLine("... После");
-            
-            // Вывод результата
-            Console.WriteLine($"RESULT IS {result}");
-            */
-            /*
-         using (var task = new Task(() => Console.WriteLine("Hello world!")))
-         {
-             task.Start();
-             task.Wait();
-         }
+            for (var i = 0; i < size; i++)
+            {
+                tasks[i] = Task.Factory.StartNew(() =>
+                {
+                    Thread.Sleep(200);
+                    WriteLine("Hello world!");
+                });
+            }
 
 
-         var t = new Task<double>(() => 42);
-         t.Start();
-         t.Wait();
-         Console.WriteLine($"result is {t.Result}");
-         t.Dispose();
+            var index = Task.WaitAny(tasks, 1000, CancellationToken.None);
+            WriteLine($"{index} --> wait");
+            if (tasks[index].IsCompleted)
+            {
+                WriteLine($"{index} --> IsCompleted");
+                tasks[index].Start();
+                tasks[index].Wait();
+                WriteLine("end");
+            }
 
-         
-         var taskWithStartParameter = new Task(o => { result += (int)o; }, 1);
-         taskWithStartParameter.Start();
-         taskWithStartParameter.Wait();
-         taskWithStartParameter.Dispose();
-         
-         Console.WriteLine($"Result from task is {result}");
-              */
 
-            Console.WriteLine("124");
-
-            var t = Wrapper();
-            t.RunSynchronously();
-            
-
+            ReadKey();
         }
 
-        private static async Task Wrapper()
+        private static void TaskChainDemo()
         {
-            Console.WriteLine("before...");
-            await Say();
-            Console.WriteLine("...after"); 
+            var actions = new Action[]
+            {
+                () => WriteLine("First task"),
+                () => WriteLine("Second task"),
+                () => WriteLine("Third task")
+            };
+
+            var chain = new TaskChain(actions);
+
+            chain.Start();
+            // chain.Wait();
         }
 
-        private static async Task Say()
+        private static void ParalleDemo()
         {
-           var i = 0;
-           for (; i < 100000; ++i);
-            
-           Console.WriteLine("Hello world!");
+            var collection = new ConcurrentQueue<int>(Enumerable.Range(1, 32));
+
+            WriteLine($"Parallel.ForEach()");
+            Parallel.ForEach(collection, WriteLine);
+
+            int start = 5, finish = 15;
+            WriteLine($"Parallel.For(i = {start}; i < {finish}; i++)");
+            // for (var i = start; i < finish; i++)
+            Parallel.For(start, finish, WriteLine);
         }
     }
 }
